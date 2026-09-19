@@ -23,6 +23,12 @@ uploader-cache/
 # No .bin is committed anywhere in this tree, without exception.
 *.bin
 
+# Nor anything else made for publishing: a release is uploaded to GitHub as an
+# asset -- the image, a zip of it, notes -- and release/ keeps only the record.
+# (`release/*`, not `release/`: an ignored directory cannot be re-included.)
+/release/*
+!/release/SHA256SUMS
+
 # ---------------------------------------------------------------------------
 # Python bytecode from the tools/ generators
 # ---------------------------------------------------------------------------
