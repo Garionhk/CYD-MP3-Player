@@ -40,7 +40,7 @@ It uploads at **115200 baud**. This board's CH340 USB chip fails the switch to
 when that happens, so a failed fast upload is harmless — just slow to retry.
 
 Plain `arduino-cli upload` writes only the player. The board works, but
-**Setup → Upload music** will report "uploader not flashed".
+**Setup → Upload music** will report "Uploader not installed".
 
 Writing the partition table resets the OTA selector to app0, so a flash always
 boots the player.
@@ -48,10 +48,12 @@ boots the player.
 ## 3. Making a release
 
 ```bash
-./tools/make_release.sh 1.0.0
+./tools/make_release.sh 1.1.0
 ```
 
-Produces `release/cyd-mp3-v1.0.0-4mb.bin` and `release/SHA256SUMS`: a full 4 MB
+Set `FIRMWARE_VERSION` in `app/firmware.h` first; the script refuses a version
+that does not match it. Produces `release/cyd-mp3-v1.1.0-4mb.bin` and adds its
+line to `release/SHA256SUMS`, keeping earlier releases' lines: a full 4 MB
 image with bootloader, partition table, OTA selector and **both** apps at their
 offsets, so the person flashing it needs one command and one address.
 
@@ -60,8 +62,10 @@ cover NVS: settings, calibration, the saved speaker and WiFi network are erased.
 That is right for a clean install and wrong for an upgrade — use section 2 for
 your own board.
 
-The script refuses to finish if the uploader's strings are missing from the
-image (a sign `strings` read the wrong file or the merge dropped app1).
+The script refuses to finish unless **each slot holds the right program**: the
+player at `0x10000`, the uploader at `0x1F0000`, each checked for a log line only
+it contains and for the absence of the other's. An image with the uploader in
+the player's slot boots only into upload mode, and "Done" cannot leave it.
 
 The title font is **not** part of a release. It is rasterised from a system font
 whose licence does not permit redistribution; each owner generates their own
@@ -87,7 +91,7 @@ esptool --port /dev/cu.usbserial-1420 erase-flash
 ```
 
 ```bash
-esptool --port /dev/cu.usbserial-1420 --baud 115200 write-flash 0x0 cyd-mp3-v1.0.0-4mb.bin
+esptool --port /dev/cu.usbserial-1420 --baud 115200 write-flash 0x0 cyd-mp3-v1.1.0-4mb.bin
 ```
 
 At 115200 a 4 MB image takes a few minutes. Older esptool (v4) spells the

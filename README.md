@@ -7,14 +7,15 @@ WiFi page for adding music from a phone or laptop.
 
 - **Plays MP3s from the SD card** over Bluetooth (A2DP). 44.1/48/32/22 kHz,
   mono or stereo, CBR or VBR. Resumes the song and position after a power cut.
-- **Touch controls**: play/pause, next, previous, volume, seek (hold ⏮/⏭), tap
-  the progress bar to jump, tap the time to show elapsed / remaining / both.
+- **Touch controls**: play/pause, next, previous, volume (buttons, or drag the
+  volume readout), seek (hold ⏮/⏭), tap the progress bar to jump, tap the time
+  to show elapsed / remaining / both. Every control lights as it is pressed.
 - **Library** with shuffle and repeat (all / one / off). Titles and artists come
   from ID3 tags, falling back to the file name.
 - **Speaker buttons work**: play/pause and next/previous on the speaker itself
   control the player. Switch the speaker off and on and it reconnects on its own.
 - **Animated backgrounds** from any GIF, any size — cropped or shrunk to fit.
-- **Looks**: 8 colour themes, 6 control styles and 3 layouts, mixed freely, in
+- **Looks**: 8 colour themes, 7 control styles and 3 layouts, mixed freely, in
   portrait or landscape either way up.
 - **English or 繁體中文** for every menu. Song titles show Chinese, Japanese and
   Latin text, anti-aliased.
@@ -92,6 +93,7 @@ from source — see [Building](#building) below.
 | ⏯ ⏮ ⏭ | play/pause, previous (restart if more than 3 s in), next |
 | hold ⏮ / ⏭ | seek back / forward 10 s |
 | 🔉 🔊 | volume −/+ 5 % |
+| drag the Bluetooth / % readout sideways | volume, smoothly |
 | progress bar | jump to that point |
 | time | cycle elapsed · remaining · both |
 | song title | open the Library |
@@ -113,14 +115,14 @@ beside it and the mini-player underneath.
 | Bluetooth speaker | current speaker; **Pair new** to switch |
 | Upload music (WiFi) | restarts into upload mode |
 | Theme | Dark, Light, Neon, Retro Amber, Ocean, Phosphor, Paper, Pop |
-| Style | Classic, Frosted deck, Swiss grid, Cassette pop, Terminal, Paper mono — the shape of buttons, rows and the progress bar |
+| Style | Classic, Frosted deck, Hi-fi console, Swiss grid, Cassette pop, Terminal, Paper mono — the shape of buttons, rows and the progress bar. Picking one also sets the theme it was designed for |
 | Layout | Classic, Big buttons, List — where things sit |
 | Background | off, bg1 … bgN |
 | Orientation | landscape, landscape flipped, portrait, portrait flipped |
-| Brightness | 100 → 20 % |
+| Brightness | slider: drag along it, 10–100 % |
 | Language | English / 中文 |
 | Invert colours | for panels whose colours come out inverted |
-| Panel type | ST7789 / ILI9341 — tap twice to switch and restart |
+| Panel type | ST7789 / ILI9341 — asks first, then switches and restarts |
 | Calibrate touch | re-run the wizard |
 | About | version, song count, free memory |
 
@@ -165,7 +167,7 @@ the screen while powering on**. On a new board the blue LED lights for 3 seconds
 — press while it is lit — then blinks from 4 s; keep holding to 8 s and the
 board switches controller and restarts. The same hold switches back.
 
-If the screen is readable, **Setup → Panel type** does the same with two taps.
+If the screen is readable, **Setup → Panel type** does the same after asking.
 Colours inverted? **Setup → Invert colours**.
 
 ---
@@ -247,7 +249,8 @@ measurements are in [docs/decisions.md](docs/decisions.md).
 | Titles show only Latin letters, menus stay English | `/.sys/cjk16.vlw` missing — see step 2 |
 | Speaker not found | Put it in pairing mode; **Setup → Bluetooth speaker → Pair new** |
 | Speaker does not reconnect after power-on | Wait ~30 s; if not, pairing mode once |
-| "uploader not flashed" in Setup | Only the player was flashed — use `tools/flash.sh app` or a release image |
+| "Uploader not installed" in Setup | Only the player was flashed — use `tools/flash.sh app` or a release image |
+| Always starts in upload mode, even after Done or a reset | The image flashed has no player in it (the uploader sits in the player's slot). Reflash with `tools/flash.sh app` or a release built by `tools/make_release.sh`, which checks for this |
 | Audio drops out | Watch the serial log's `underruns` count; try background off to compare |
 
 Serial log: 115200 baud. Every 10 s it prints free memory, audio buffer fill and

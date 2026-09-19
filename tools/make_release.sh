@@ -2,15 +2,16 @@
 # ---------------------------------------------------------------------------
 # make_release.sh -- build both firmware images and merge them into ONE file
 #
-#   ./tools/make_release.sh 1.0.0
+#   ./tools/make_release.sh 1.1.0
 #
-# Produces release/cyd-mp3-v1.0.0-4mb.bin and updates release/SHA256SUMS.
+# Produces release/cyd-mp3-v1.1.0-4mb.bin and adds its line to
+# release/SHA256SUMS, keeping the lines of earlier releases.
 #
 # The player (app0) and the WiFi uploader (app1) are separate images (see
 # app/firmware.h). A person flashing a release should not have to know that,
 # so the release is a full 4 MB image -- bootloader, partition table, OTA
 # selector and BOTH apps at their offsets -- written with a single
-#   esptool write-flash 0x0 cyd-mp3-v1.0.0-4mb.bin
+#   esptool write-flash 0x0 cyd-mp3-v1.1.0-4mb.bin
 #
 # Like any full image written at 0x0 it is a factory reset: the gaps are 0xFF,
 # which covers NVS (settings, calibration, saved speaker and WiFi). To update
@@ -21,9 +22,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# "v1.1.0" and "V1.1.0" mean 1.1.0: the file name adds its own "v".
 VERSION="${1:-}"
-if [ -z "$VERSION" ]; then
-  echo "usage: tools/make_release.sh <version>   e.g. 1.0.0" >&2
+VERSION="${VERSION#[vV]}"
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "usage: tools/make_release.sh <version>   e.g. 1.1.0" >&2
+  exit 1
+fi
+# The version the firmware reports (Setup > About, the boot banner) must be the
+# one on the file.
+if ! grep -q "#define FIRMWARE_VERSION \"$VERSION\"" app/firmware.h; then
+  echo "app/firmware.h says $(grep -o 'FIRMWARE_VERSION "[^"]*"' app/firmware.h), not $VERSION" >&2
   exit 1
 fi
 
@@ -61,22 +70,38 @@ OUT="release/cyd-mp3-v${VERSION}-4mb.bin"
     0x10000 "$PLAYER/app.ino.bin" \
     "$UPLOADER_OFFSET" "$UPLOADER/app.ino.bin"
 
-# The uploader image must really be in there: a merge that silently dropped
-# app1 would produce a player-only release whose Setup says "uploader not
-# flashed". This string exists only in uploadmode.cpp, and the UI strings do
-# not work as a marker -- i18n.cpp is shared, so both halves carry those.
+# Each slot must hold the right program. Checking only that the uploader is
+# SOMEWHERE in the file is not enough: an image with the uploader in app0 and
+# nothing in app1 passes that test, and a board flashed with it can only ever
+# boot into upload mode -- whose "back to the player" lands on itself. That is
+# a real failure this project shipped once.
 #
-# grep -a, not `strings`: macOS `strings` scans object-file sections and finds
-# nothing in a raw image.
-#
-# Nothing user-specific is in either image -- settings live in NVS, songs on the
-# card -- so there is nothing else to scrub.
-if ! grep -aq "upload: hotspot" "$OUT"; then
-  echo "sanity check failed: the uploader image is not in $OUT" >&2
-  exit 1
-fi
+# Each marker is a log line that exists in one program only. UI strings will
+# not do: i18n.cpp is shared, so both programs carry them.
+PLAYER_MARK="heap before audio + bt"      # app.ino, player half
+UPLOADER_MARK="upload: hotspot"           # uploadmode.cpp
+SLOT="$(mktemp)"
+trap 'rm -f "$SLOT"' EXIT
+check_slot() {   # <offset> <name> <must contain> <must not contain>
+  # 0x1E0000 bytes: one app slot in min_spiffs.csv. No pipe into grep -q:
+  # under pipefail its early exit would fail the pipeline even on a match.
+  dd if="$OUT" of="$SLOT" bs=65536 skip=$(( $1 / 65536 )) count=30 2>/dev/null
+  if ! grep -aqF "$3" "$SLOT" || grep -aqF "$4" "$SLOT"; then
+    echo "sanity check failed: $2 at $(printf 0x%X "$1") is not the $2 image" >&2
+    rm -f "$OUT"
+    exit 1
+  fi
+}
+check_slot 0x10000          player   "$PLAYER_MARK"   "$UPLOADER_MARK"
+check_slot "$UPLOADER_OFFSET" uploader "$UPLOADER_MARK" "$PLAYER_MARK"
 
-( cd release && shasum -a 256 "$(basename "$OUT")" > SHA256SUMS )
+# One line per published release: replace this file's, keep the others.
+NAME="$(basename "$OUT")"
+touch release/SHA256SUMS
+{ grep -vF "  $NAME" release/SHA256SUMS || true
+  ( cd release && shasum -a 256 "$NAME" )
+} > release/SHA256SUMS.new
+mv release/SHA256SUMS.new release/SHA256SUMS
 echo
 ls -l "$OUT"
 cat release/SHA256SUMS

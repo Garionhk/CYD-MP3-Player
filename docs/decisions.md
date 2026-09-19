@@ -8,6 +8,43 @@ With the Bluetooth stack (~80 KB) and the MP3 decoder (~33 KB) running, the
 player has ~30 KB of heap to spare, and a Bluetooth connection briefly needs a
 good part of that.
 
+## 2026-09-18 — A release is checked slot by slot
+
+**Context.** A merged image went out of the build with the uploader in app0 and
+app1 empty. Flashed, the board booted only into upload mode: the uploader
+points the next boot at app0 as it starts, which was itself, so neither "Done"
+nor a reset could leave. `make_release.sh` passed it, because its check only
+asked whether the uploader was somewhere in the file. Being a full 4 MB image,
+it also erased the settings and the saved speaker.
+
+**Decision.** The script checks each slot: app0 must contain a log line only
+the player has and not the uploader's, app1 the reverse. It deletes the image
+if either fails, and refuses a version that differs from `FIRMWARE_VERSION`.
+
+## 2026-09-18 — The look is data: tokens, styles, components
+
+**Context.** Layouts were already data (a new skin cost no drawing code), but
+the shape of a button was hard-coded in `ui_button()`, so a new look meant new
+C++, and screens that wanted a different control re-drew their own. Sizes were
+literals: the same list row was 30, 35 and 29 px on three screens.
+
+**Decision.** Three layers. `tokens.h` holds sizes. `theme` holds colour, widened
+from 13 roles to 20 (surfaces, outlines, pressed, on-accent). `style` holds
+shape — radius, inset, border, shadow, bevel, divider, bar form, fonts — as a
+table row, chosen in Setup independently of Theme. Components in `ui.h` read
+all three. Classic reproduces the old look pixel for pixel, as the fallback.
+
+**Constraints that shaped it.** No framebuffer, so "frosted" is a raised surface
+and a highlight line, not a blur, and overlays end by redrawing the screen.
+Song titles stay 18 px in every style: they are pre-rendered strips shared by
+Chinese and Latin text. A style's numeric font falls back when too tall for its
+box or missing a glyph — font 7 has no "/", and at 48 px fits no time box.
+
+**Touch.** Gestures are still classified on release; that code is unchanged.
+Screens get an optional press hook for feedback and drags, fed by a new live
+finger position. A drag is exempt from the 4 s recalibrate hold, which a slow
+brightness adjustment would otherwise cross.
+
 ## 2026-09-17 — Player and uploader are separate firmware images
 
 **Context.** Upload mode was first a restart flag inside one binary: boot with

@@ -22,7 +22,7 @@
 #include <Arduino.h>
 
 // One version for both images; tools/make_release.sh names the file after it.
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.1.0"
 
 // Is the other image flashed and valid? False when only the player was
 // uploaded (e.g. with plain arduino-cli upload).
