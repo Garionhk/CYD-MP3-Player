@@ -201,7 +201,9 @@ void loop() {
 
   int x = 0, y = 0;
   const TouchEvent ev = touch_poll(&x, &y);
-  if (ev == TOUCH_RECALIBRATE) {
+  // A drag is routed like any other gesture -- ui_touch() swallows it -- even
+  // when it ran long enough to read as the recalibrate hold.
+  if (ev == TOUCH_RECALIBRATE && !ui_pressClaimed()) {
     calibrate_run();
     ui_redraw();
   } else if (ev != TOUCH_NONE) {

@@ -23,7 +23,6 @@ static const Entry TABLE[] = {
   { "none",                  "無" },
   { "(off)",                 "（離線）" },
   { "no GIFs in /bg",        "/bg 沒有 GIF" },
-  { "tap again to restart",  "再按一次重新啟動" },
   { "Landscape",             "橫向" },
   { "Landscape flipped",     "橫向（反轉）" },
   { "Portrait",              "直向" },
@@ -68,6 +67,12 @@ static const Entry TABLE[] = {
   { "Hotspot",               "熱點" },
   { "Receiving",             "正在接收" },
   { "Restarting...",         "重新啟動中…" },
+  { "Cancel",                "取消" },
+  { "Restart",               "重新啟動" },
+  { "Switch panel type?",    "切換面板型號？" },
+  { "The screen may go blank.", "畫面可能會變黑。" },
+  { "Hold it 8 s at boot to undo.", "開機按住螢幕 8 秒可復原。" },
+  { "Uploader not installed", "未安裝上傳程式" },
 };
 static_assert(sizeof(TABLE) / sizeof(TABLE[0]) == T_COUNT, "i18n TABLE does not match enum Txt");
 

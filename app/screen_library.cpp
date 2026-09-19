@@ -38,15 +38,19 @@ static Rect downRect() {
 static int top = 0;
 static int shownTrack = -1;
 
+// Under the finger: 0 shuffle, 1 repeat, 2 up, 3 down.
+static int lit = -1;
+
 static void drawHeaderButtons() {
   const uint16_t band = theme().band;
-  ui_iconToggle(shuffleRect(), ICON_SHUFFLE, audio_shuffle(), band);
+  ui_iconToggle(shuffleRect(), ICON_SHUFFLE, audio_shuffle(), band, lit == 0);
   const uint8_t rep = audio_repeat();
   ui_iconToggle(repeatRect(), rep == REPEAT_ONE ? ICON_REPEAT_ONE : ICON_REPEAT,
-                rep != REPEAT_OFF, band);
+                rep != REPEAT_OFF, band, lit == 1);
 }
 
 static void enter() {
+  lit = -1;
   tft.fillScreen(theme().bg);
   ui_header(T_LIBRARY, String(storage_trackCount()));
   drawHeaderButtons();
@@ -111,6 +115,23 @@ static void touch(TouchEvent ev, int x, int y) {
   }
 }
 
-const Screen SCREEN_LIBRARY = { enter, nullptr, tick, touch };
+static bool press(PressPhase phase, int x, int y) {
+  if (phase == PRESS_DOWN) {
+    lit = shuffleRect().contains(x, y) ? 0 : repeatRect().contains(x, y) ? 1
+        : upRect().contains(x, y) ? 2 : downRect().contains(x, y) ? 3 : -1;
+  } else if (phase == PRESS_UP && lit >= 0) {
+    lit = -1;
+  } else {
+    return false;
+  }
+  // Redraw whatever changed state; with lit back at -1 this is the restore.
+  if (phase == PRESS_DOWN && lit < 0) return false;
+  drawHeaderButtons();
+  ui_button(upRect(), ICON_UP, false, lit == 2);
+  ui_button(downRect(), ICON_DOWN, false, lit == 3);
+  return false;
+}
+
+const Screen SCREEN_LIBRARY = { enter, nullptr, tick, touch, press };
 
 #endif  // !CYD_UPLOADER

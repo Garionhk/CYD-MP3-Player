@@ -49,13 +49,15 @@ void ui_button(const Rect& r, Icon icon, bool active = false, bool pressed = fal
 void ui_bar(const Rect& r, int px, uint16_t surface);
 
 // A word in a button face instead of an icon.
-void ui_textButton(const Rect& r, Txt label, bool primary = false, bool pressed = false);
+// `surface` is what the button sits on: the screen, or a dialog's panel.
+void ui_textButton(const Rect& r, Txt label, bool primary = false, bool pressed = false,
+                   int32_t surface = -1);
 
 // The up/down arrows down the right edge of a long list.
 void ui_pager(const Rect& up, const Rect& down);
 
 // A borderless toggle sitting on a header band: the face appears only when on.
-void ui_iconToggle(const Rect& r, Icon icon, bool on, uint16_t surface);
+void ui_iconToggle(const Rect& r, Icon icon, bool on, uint16_t surface, bool pressed = false);
 
 // An icon and a short value sharing one box -- the speaker state and volume.
 void ui_chip(const Rect& r, Icon icon, uint16_t iconColour, const String& text,
@@ -74,7 +76,7 @@ void ui_slider(const Rect& r, int value, int maxValue, uint16_t surface);
 // nothing) and return the colour its content must be drawn against. Shared by
 // Setup's settings list and the track list, which carry different content on
 // the same surface.
-uint16_t ui_rowSurface(const Rect& r, int index, bool active = false);
+uint16_t ui_rowSurface(const Rect& r, int index, bool active = false, bool pressed = false);
 
 // What a row's value is, and therefore what tapping the row will do. Today
 // every Setup row looks the same whether it cycles, navigates or opens a
@@ -101,7 +103,13 @@ RowValue ui_sliderValue(int value, int maxValue);
 Rect ui_rowTrack(const Rect& r);
 
 // One settings row: label at the left, value and its affordance at the right.
-void ui_row(const Rect& r, int index, Txt label, const RowValue& v);
+void ui_row(const Rect& r, int index, Txt label, const RowValue& v, bool pressed = false);
+
+// Redraw only a slider row's right half -- the track and its value -- as a drag
+// moves it. The label is left alone: in Chinese it is a strip read from the
+// card, and repainting it on every step of a drag would hammer the SD bus the
+// audio is reading from.
+void ui_rowSlider(const Rect& r, int index, int value, int maxValue);
 
 // Text in any script. Pure ASCII is drawn with the built-in font; anything
 // else from its pre-rendered strip (titles.h), falling back to the built-in
@@ -127,11 +135,20 @@ String ui_time(uint32_t ms, bool known = true);
 // ---------------------------------------------------------------------------
 enum ScreenId : uint8_t { SCR_PLAYER, SCR_SETUP, SCR_BLUETOOTH, SCR_LIBRARY, SCR_COUNT };
 
+// What a finger is doing right now, for feedback while it is down. Gestures
+// (TouchEvent) are classified on release; this is everything before that.
+enum PressPhase : uint8_t { PRESS_DOWN, PRESS_MOVE, PRESS_UP };
+
 struct Screen {
   void (*enter)();
   void (*leave)();
   void (*tick)(uint32_t now);
   void (*touch)(TouchEvent ev, int x, int y);
+  // Optional. Light what is under the finger on DOWN, follow a drag on MOVE,
+  // restore on UP -- which always arrives before the gesture's event, so a
+  // screen the tap switches to is never drawn over. Return true to claim the
+  // press as a drag: its tap or long-press is then not delivered.
+  bool (*press)(PressPhase phase, int x, int y);
 };
 
 extern const Screen SCREEN_PLAYER, SCREEN_SETUP, SCREEN_BLUETOOTH, SCREEN_LIBRARY;
@@ -141,3 +158,23 @@ ScreenId ui_current();
 void     ui_tick(uint32_t now);
 void     ui_touch(TouchEvent ev, int x, int y);
 void     ui_redraw();                 // re-enter the current screen (after calibration)
+// True while the press under way has been taken as a drag. A drag can easily
+// outlast the 4 s that makes a hold mean "recalibrate", and must not.
+bool     ui_pressClaimed();
+
+// ---------------------------------------------------------------------------
+// Overlays
+// ---------------------------------------------------------------------------
+// There is no framebuffer to restore from, so an overlay ends by redrawing the
+// screen under it whole. While one is up the screen's tick is paused (audio
+// and Bluetooth are ticked from the loop and carry on), so nothing is painted
+// over it, and the next tap goes to the overlay.
+
+// A short message across the bottom of the screen. Goes by itself after `ms`,
+// or at the next tap, which it swallows.
+void ui_toast(Txt text, uint32_t ms = 2500);
+
+// A question with Cancel and an action button. `onOk` runs if the owner
+// confirms; either way the screen underneath is redrawn.
+typedef void (*ConfirmFn)();
+void ui_confirm(Txt title, Txt line1, Txt line2, Txt okLabel, ConfirmFn onOk);

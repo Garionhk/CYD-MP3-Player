@@ -36,9 +36,12 @@ static const Txt ROW_LABELS[ROW_COUNT] = {
 static const int ROW_H   = UI_ROW_H;
 static const int ARROW_W = UI_PAGER_W;
 
-static int      top = 0;                  // first visible row
-static uint32_t panelArmedUntil = 0;      // "tap again to restart" window
-static uint32_t uploaderMissingUntil = 0; // flash the "not installed" note
+static int  top = 0;                      // first visible row
+
+// Under the finger right now (the press hook, below).
+static int  litRow   = -1;                // a row drawn pressed
+static int  litArrow = -1;                // 0 up, 1 down
+static bool dragging = false;             // the brightness track has the finger
 
 static int  visibleRows() { return (tft.height() - UI_HEADER_H) / ROW_H; }
 static bool needArrows()  { return visibleRows() < ROW_COUNT; }
@@ -73,12 +76,10 @@ static RowValue rowValue(Row r) {
     case ROW_BRIGHTNESS: return ui_sliderValue(g_settings.brightness, 100);
     case ROW_LANGUAGE:   return ui_cycle(T_LANG_NAME);
     case ROW_INVERT:     return ui_toggleValue(g_settings.invert);
-    case ROW_PANEL:
-      if (millis() < panelArmedUntil) return ui_info(String(tr(T_TAP_AGAIN_RESTART)));
-      return ui_cycle(String(display_panelName(g_settings.panel)));
+    // A chevron, not a cycle: tapping asks before it restarts.
+    case ROW_PANEL:      return ui_nav(String(display_panelName(g_settings.panel)));
     case ROW_CALIBRATE:  return ui_nav();
-    case ROW_UPLOAD:
-      return millis() < uploaderMissingUntil ? ui_info("uploader not flashed") : ui_nav();
+    case ROW_UPLOAD:     return ui_nav();
     case ROW_ABOUT: {
       char b[40];
       snprintf(b, sizeof(b), "v" FIRMWARE_VERSION "  %d  %u KB", storage_trackCount(), ESP.getFreeHeap() / 1024);
@@ -105,6 +106,8 @@ static void drawRows() {
 }
 
 static void enter() {
+  litRow = litArrow = -1;
+  dragging = false;
   tft.fillScreen(theme().bg);
   ui_header(T_SETUP);
   top = constrain(top, 0, max(0, ROW_COUNT - visibleRows()));
@@ -117,16 +120,15 @@ static void tick(uint32_t now) {
   if (now - last > 2000) {                  // free heap and speaker state move
     last = now;
     drawRow(ROW_ABOUT);
-    drawRow(ROW_BLUETOOTH);
+    if (litRow != ROW_BLUETOOTH) drawRow(ROW_BLUETOOTH);   // not out from under a finger
   }
-  if (uploaderMissingUntil && now >= uploaderMissingUntil) {
-    uploaderMissingUntil = 0;
-    drawRow(ROW_UPLOAD);
-  }
-  if (panelArmedUntil && now >= panelArmedUntil) {
-    panelArmedUntil = 0;
-    drawRow(ROW_PANEL);
-  }
+}
+
+static void switchPanel() {
+  g_settings.panel = (g_settings.panel == CYD_PANEL_ST7789) ? CYD_PANEL_ILI9341 : CYD_PANEL_ST7789;
+  settings_save();
+  delay(200);
+  ESP.restart();
 }
 
 static void touch(TouchEvent ev, int x, int y) {
@@ -149,8 +151,7 @@ static void touch(TouchEvent ev, int x, int y) {
       return;
     case ROW_UPLOAD:
       if (!firmware_uploaderPresent()) {
-        uploaderMissingUntil = millis() + 3000;
-        drawRow(ROW_UPLOAD);
+        ui_toast(T_UPLOADER_MISSING);
         return;
       }
       // Keep the exact spot in the song: upload mode ends in a restart.
@@ -189,15 +190,6 @@ static void touch(TouchEvent ev, int x, int y) {
       enter();
       return;
     }
-    case ROW_BRIGHTNESS: {
-      // The value is wherever along the track the finger landed, floored at
-      // 10 % so the screen can never be turned off entirely.
-      const Rect t = ui_rowTrack(rowRect(r));
-      if (t.w <= 0) return;
-      g_settings.brightness = constrain((x - t.x) * 100 / t.w, 10, 100);
-      display_setBacklight(g_settings.brightness);
-      break;
-    }
     case ROW_LANGUAGE:
       g_settings.lang = (g_settings.lang + 1) % LANG_COUNT;
       settings_save();
@@ -208,17 +200,10 @@ static void touch(TouchEvent ev, int x, int y) {
       tft.invertDisplay(g_settings.invert);
       break;
     case ROW_PANEL:
-      // Two taps: the wrong controller shows nothing, so switching must not
-      // happen by accident. The 8 s boot hold switches back (display.h).
-      if (millis() < panelArmedUntil) {
-        g_settings.panel = (g_settings.panel == CYD_PANEL_ST7789) ? CYD_PANEL_ILI9341
-                                                                 : CYD_PANEL_ST7789;
-        settings_save();
-        delay(200);
-        ESP.restart();
-      }
-      panelArmedUntil = millis() + 3000;
-      drawRow(ROW_PANEL);
+      // The wrong controller shows nothing, so this must not happen by
+      // accident -- and the owner should know the way back before they need
+      // it: the 8 s boot hold (display.h).
+      ui_confirm(T_PANEL_CONFIRM, T_PANEL_WARN1, T_PANEL_WARN2, T_RESTART, switchPanel);
       return;
     case ROW_CALIBRATE:
       calibrate_run();
@@ -231,6 +216,69 @@ static void touch(TouchEvent ev, int x, int y) {
   drawRow(r);
 }
 
-const Screen SCREEN_SETUP = { enter, nullptr, tick, touch };
+// ---------------------------------------------------------------------------
+// The finger while it is down
+// ---------------------------------------------------------------------------
+static int rowAt(int x, int y) {
+  if (y < UI_HEADER_H || x >= rowWidth()) return -1;
+  const int r = top + (y - UI_HEADER_H) / ROW_H;
+  return (r < ROW_COUNT && r < top + visibleRows()) ? r : -1;
+}
+
+// Follow the finger along the brightness track, repainting only its half of
+// the row. Floored at 10 % so the screen can never be turned off entirely.
+static void brightnessAt(int x) {
+  const Rect row = rowRect(ROW_BRIGHTNESS);
+  const Rect t = ui_rowTrack(row);
+  if (t.w <= 0) return;
+  const int v = constrain((x - t.x) * 100 / t.w, 10, 100);
+  if (v == g_settings.brightness) return;
+  g_settings.brightness = v;
+  display_setBacklight(v);
+  ui_rowSlider(row, ROW_BRIGHTNESS, v, 100);
+}
+
+static void drawArrow(int which, bool pressed) {
+  if (which == 0) ui_button(upRect(), ICON_UP, false, pressed);
+  else            ui_button(downRect(), ICON_DOWN, false, pressed);
+}
+
+static bool press(PressPhase phase, int x, int y) {
+  switch (phase) {
+    case PRESS_DOWN: {
+      if (needArrows() && (upRect().contains(x, y) || downRect().contains(x, y))) {
+        litArrow = upRect().contains(x, y) ? 0 : 1;
+        drawArrow(litArrow, true);
+        return false;
+      }
+      const int r = rowAt(x, y);
+      if (r == ROW_BRIGHTNESS) {
+        dragging = true;
+        brightnessAt(x);
+        return true;                      // a drag: no tap follows
+      }
+      if (r >= 0 && rowValue((Row)r).kind != RK_INFO) {
+        litRow = r;
+        ui_row(rowRect(r), r, ROW_LABELS[r], rowValue((Row)r), true);
+      }
+      return false;
+    }
+    case PRESS_MOVE:
+      if (dragging) brightnessAt(x);
+      return dragging;
+    case PRESS_UP:
+      if (dragging) {
+        dragging = false;
+        settings_save();                  // once, when the finger lifts
+        return true;
+      }
+      if (litArrow >= 0) { drawArrow(litArrow, false); litArrow = -1; }
+      if (litRow >= 0)   { const int r = litRow; litRow = -1; drawRow(r); }
+      return false;
+  }
+  return false;
+}
+
+const Screen SCREEN_SETUP = { enter, nullptr, tick, touch, press };
 
 #endif  // !CYD_UPLOADER

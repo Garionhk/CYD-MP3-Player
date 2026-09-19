@@ -87,7 +87,8 @@ void touch_screenPoint(long rx, long ry, int& sx, int& sy) {
 // ---------------------------------------------------------------------------
 static bool     isDown = false;
 static uint32_t downAt = 0, lastSeenMs = 0, lastUpAt = 0;
-static int      lastSx = 0, lastSy = 0;
+static int      lastSx = 0, lastSy = 0;   // where the press landed
+static int      liveSx = 0, liveSy = 0;   // where the finger is now
 
 // One dropped sample mid-press must not split a press in two.
 static const uint32_t RELEASE_GRACE_MS = 60;
@@ -112,6 +113,7 @@ void touch_begin() {
 bool     touch_isDown() { return isDown; }
 uint32_t touch_heldMs() { return isDown ? millis() - downAt : 0; }
 void     touch_position(int& x, int& y) { x = lastSx; y = lastSy; }
+void     touch_livePosition(int& x, int& y) { x = liveSx; y = liveSy; }
 
 TouchEvent touch_poll(int* x, int* y) {
   const uint32_t now = millis();
@@ -123,6 +125,15 @@ TouchEvent touch_poll(int* x, int* y) {
       isDown = true;
       downAt = now;
       touch_screenPoint(rx, ry, lastSx, lastSy);   // where the press LANDED
+      liveSx = lastSx;
+      liveSy = lastSy;
+    } else {
+      // Half-way toward each new sample: a resistive panel's readings jitter by
+      // a few pixels, and a drag should glide rather than shiver.
+      int sx, sy;
+      touch_screenPoint(rx, ry, sx, sy);
+      liveSx = (liveSx + sx) / 2;
+      liveSy = (liveSy + sy) / 2;
     }
     return TOUCH_NONE;
   }

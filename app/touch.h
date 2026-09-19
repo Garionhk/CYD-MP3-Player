@@ -41,8 +41,13 @@ void       touch_begin();
 TouchEvent touch_poll(int* x = nullptr, int* y = nullptr);
 bool       touch_isDown();
 uint32_t   touch_heldMs();
-// Where the finger is right now (screen coordinates), valid while down.
+// Where the current press LANDED (screen coordinates), valid while down. This
+// is the point touch_poll() reports when the press ends: a tap acts where the
+// finger went down, not where it drifted to.
 void       touch_position(int& x, int& y);
+// Where the finger is NOW, smoothed, valid while down -- for drags. Tracking it
+// does not change how a press is classified or where its event lands.
+void       touch_livePosition(int& x, int& y);
 
 bool touch_readRaw(int& rx, int& ry, int& z);
 int  touch_measureNoiseFloor();

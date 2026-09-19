@@ -53,6 +53,16 @@ static const int      SCROLL_GAP      = 40;
 
 static void saveSoon(uint32_t now) { saveAt = now + 3000; }
 
+// Under the finger right now (the press hook, at the bottom).
+static int  litButton   = -1;            // PB_* or one of the two below
+static int  dragFromVol = -1;            // volume when a drag on the chip began
+static int  dragFromX   = 0;
+static const int LIT_LIST_UP = PB_COUNT, LIT_LIST_DOWN = PB_COUNT + 1;
+// Finger travel for the whole 0-100 % range. Wider than the chip on purpose:
+// the drag is relative and keeps the finger once it has landed, so it can run
+// out over the band and the buttons.
+static const int VOL_DRAG_SPAN = 120;
+
 static bool has(const Rect& r) { return r.w > 0; }
 
 static void drawArea() {
@@ -135,7 +145,7 @@ static void drawTime() {
   }
 }
 
-static void drawButton(int i) {
+static void drawButton(int i, bool pressed = false) {
   if (!has(L->buttons[i])) return;
   Icon icon = BUTTON_ICONS[i];
   bool active = false;
@@ -143,7 +153,7 @@ static void drawButton(int i) {
     active = audio_isPlaying();
     icon = active ? ICON_PAUSE : ICON_PLAY;
   }
-  ui_button(L->buttons[i], icon, active);
+  ui_button(L->buttons[i], icon, active, pressed);
 }
 
 static void drawList() {
@@ -167,6 +177,7 @@ static void loadTitle() {
 
 static void enter() {
   L = &layout_player();
+  litButton = dragFromVol = -1;
   const Palette& p = theme();
   tft.fillScreen(p.bg);
 
@@ -329,6 +340,56 @@ static void touch(TouchEvent ev, int x, int y) {
   }
 }
 
-const Screen SCREEN_PLAYER = { enter, leave, tick, touch };
+// ---------------------------------------------------------------------------
+// The finger while it is down
+// ---------------------------------------------------------------------------
+static const Rect& litRect(int i) {
+  return i == LIT_LIST_UP ? L->listUp : i == LIT_LIST_DOWN ? L->listDown : L->buttons[i];
+}
+
+static void drawLit(int i, bool pressed) {
+  if (i < PB_COUNT) drawButton(i, pressed);
+  else ui_button(litRect(i), i == LIT_LIST_UP ? ICON_UP : ICON_DOWN, false, pressed);
+}
+
+static bool press(PressPhase phase, int x, int y) {
+  switch (phase) {
+    case PRESS_DOWN:
+      // The volume chip is a knob: drag it sideways. Relative to where the
+      // finger lands, so touching it never jumps the volume.
+      if (has(L->status) && L->status.contains(x, y)) {
+        dragFromVol = audio_volume();
+        dragFromX = x;
+        return true;
+      }
+      for (int i = 0; i <= LIT_LIST_DOWN; i++) {
+        if (has(litRect(i)) && litRect(i).contains(x, y)) {
+          litButton = i;
+          drawLit(i, true);
+          break;
+        }
+      }
+      return false;
+    case PRESS_MOVE: {
+      if (dragFromVol < 0) return false;
+      const int v = constrain(dragFromVol + (x - dragFromX) * 100 / VOL_DRAG_SPAN, 0, 100);
+      if (v != audio_volume()) {
+        audio_setVolume(v);               // tick sees the change and redraws the chip
+        g_settings.volume = audio_volume();
+        saveSoon(millis());
+      }
+      return true;
+    }
+    case PRESS_UP:
+      if (dragFromVol >= 0) { dragFromVol = -1; return true; }
+      // Held buttons stay lit until release, even if the finger slides off:
+      // the tap still lands where it went down, so un-lighting would lie.
+      if (litButton >= 0) { drawLit(litButton, false); litButton = -1; }
+      return false;
+  }
+  return false;
+}
+
+const Screen SCREEN_PLAYER = { enter, leave, tick, touch, press };
 
 #endif  // !CYD_UPLOADER

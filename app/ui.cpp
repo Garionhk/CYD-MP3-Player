@@ -134,13 +134,14 @@ void ui_icon(Icon icon, int cx, int cy, int s, uint16_t fg, uint16_t bg) {
 // change leaves nothing of the old shape behind.
 
 // The face a control wears when it is merely sitting there. Outlined and
-// chromeless styles wear the screen itself.
-static uint16_t restFace() {
+// chromeless styles wear whatever they sit on -- usually the screen, a
+// dialog's panel inside one.
+static uint16_t restFace(uint16_t surface) {
   const Palette& p = theme();
   switch (style().button) {
     case BTN_PILL:    return p.surfaceRaised;
     case BTN_OUTLINE:
-    case BTN_NONE:    return p.bg;
+    case BTN_NONE:    return surface;
     default:          return p.btn;
   }
 }
@@ -156,12 +157,12 @@ static uint16_t faceInk(bool active, bool pressed) {
 
 // Paint the face and hand back the colour that landed, so the caller can draw
 // an icon or a word against it.
-static uint16_t ui_face(const Rect& r, bool active, bool pressed) {
+static uint16_t ui_face(const Rect& r, bool active, bool pressed, uint16_t surface) {
   const Palette& p = theme();
   const Style&   s = style();
-  const uint16_t face = pressed ? p.pressed : active ? p.btnActive : restFace();
+  const uint16_t face = pressed ? p.pressed : active ? p.btnActive : restFace(surface);
 
-  tft.fillRect(r.x, r.y, r.w, r.h, p.bg);
+  tft.fillRect(r.x, r.y, r.w, r.h, surface);
 
   const int x = r.x + s.inset, y = r.y + s.inset;
   const int w = r.w - s.inset * 2, h = r.h - s.inset * 2;
@@ -196,19 +197,19 @@ static uint16_t ui_face(const Rect& r, bool active, bool pressed) {
     // Light where the light would fall, dark where it would not.
     tft.drawFastHLine(x, y, w, active ? p.onControlActive : p.outline);
     tft.drawFastVLine(x, y, h, active ? p.onControlActive : p.outline);
-    tft.drawFastHLine(x, y + h - 1, w, p.bg);
-    tft.drawFastVLine(x + w - 1, y, h, p.bg);
+    tft.drawFastHLine(x, y + h - 1, w, surface == p.bg ? p.bg : p.outlineSubtle);
+    tft.drawFastVLine(x + w - 1, y, h, surface == p.bg ? p.bg : p.outlineSubtle);
   }
   return face;
 }
 
 void ui_button(const Rect& r, Icon icon, bool active, bool pressed) {
-  const uint16_t face = ui_face(r, active, pressed);
+  const uint16_t face = ui_face(r, active, pressed, theme().bg);
   ui_icon(icon, r.cx(), r.cy(), min(r.w, r.h) * 9 / 20, faceInk(active, pressed), face);
 }
 
-void ui_textButton(const Rect& r, Txt label, bool primary, bool pressed) {
-  const uint16_t face = ui_face(r, primary, pressed);
+void ui_textButton(const Rect& r, Txt label, bool primary, bool pressed, int32_t surface) {
+  const uint16_t face = ui_face(r, primary, pressed, surface < 0 ? theme().bg : (uint16_t)surface);
   ui_label(label, r.cx(), r.cy(), MC_DATUM, faceInk(primary, pressed), face, r.w - SP_XL);
 }
 
@@ -219,17 +220,17 @@ void ui_pager(const Rect& up, const Rect& down) {
 
 // A toggle that lives on a header band rather than on the screen: off, it is
 // nothing but its icon; on, the face appears under it.
-void ui_iconToggle(const Rect& r, Icon icon, bool on, uint16_t surface) {
+void ui_iconToggle(const Rect& r, Icon icon, bool on, uint16_t surface, bool pressed) {
   const Palette& p = theme();
   const Style&   s = style();
   tft.fillRect(r.x, r.y, r.w, r.h, surface);
-  const uint16_t face = on ? p.btnActive : surface;
+  const uint16_t face = pressed ? p.pressed : on ? p.btnActive : surface;
   const int rad = min<int>(s.radius, 6);
   if (rad) tft.fillRoundRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6, rad, face);
   else     tft.fillRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6, face);
   if (on && s.border)
     tft.drawRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6, p.outline);
-  ui_icon(icon, r.cx(), r.cy(), ICON_MD, on ? p.onControlActive : p.dim, face);
+  ui_icon(icon, r.cx(), r.cy(), ICON_MD, (on || pressed) ? p.onControlActive : p.dim, face);
 }
 
 void ui_chip(const Rect& r, Icon icon, uint16_t iconColour, const String& text,
@@ -262,18 +263,39 @@ void ui_slider(const Rect& r, int value, int maxValue, uint16_t surface) {
 // ---------------------------------------------------------------------------
 // List rows
 // ---------------------------------------------------------------------------
-uint16_t ui_rowSurface(const Rect& r, int index, bool active) {
+static uint16_t rowColour(int index, bool active, bool pressed) {
   const Palette& p = theme();
-  const Style&   s = style();
-  const uint16_t bg = active ? p.btnActive
-                    : (s.divider == DIV_ZEBRA && (index % 2) == 0) ? p.band : p.bg;
-  tft.fillRect(r.x, r.y, r.w, r.h, bg);
-  if (!active) {
-    if (s.divider == DIV_HAIRLINE)
-      tft.drawFastHLine(r.x, r.y + r.h - 1, r.w, p.outlineSubtle);
-    else if (s.divider == DIV_BOX)
-      tft.drawRect(r.x, r.y, r.w, r.h, p.outlineSubtle);
+  if (pressed) return p.pressed;
+  if (active)  return p.btnActive;
+  return (style().divider == DIV_ZEBRA && (index % 2) == 0) ? p.band : p.bg;
+}
+
+// Paint `part` of `row` -- the whole row, or a slice of it -- with the row's
+// colour and whatever pieces of its divider fall inside the slice. A box's
+// side edges belong only to the slices at the row's ends.
+static void paintRowPart(const Rect& row, const Rect& part, uint16_t bg, bool plain) {
+  const Palette& p = theme();
+  tft.fillRect(part.x, part.y, part.w, part.h, bg);
+  if (plain) return;
+  switch (style().divider) {
+    case DIV_HAIRLINE:
+      tft.drawFastHLine(part.x, row.y + row.h - 1, part.w, p.outlineSubtle);
+      break;
+    case DIV_BOX:
+      tft.drawFastHLine(part.x, row.y, part.w, p.outlineSubtle);
+      tft.drawFastHLine(part.x, row.y + row.h - 1, part.w, p.outlineSubtle);
+      if (part.x == row.x) tft.drawFastVLine(row.x, row.y, row.h, p.outlineSubtle);
+      if (part.x + part.w == row.x + row.w)
+        tft.drawFastVLine(row.x + row.w - 1, row.y, row.h, p.outlineSubtle);
+      break;
+    default:
+      break;
   }
+}
+
+uint16_t ui_rowSurface(const Rect& r, int index, bool active, bool pressed) {
+  const uint16_t bg = rowColour(index, active, pressed);
+  paintRowPart(r, r, bg, active || pressed);
   return bg;
 }
 
@@ -293,10 +315,30 @@ RowValue ui_info(const String& text)  { return { RK_INFO,   T_COUNT, text,   0, 
 RowValue ui_toggleValue(bool on)      { return { RK_TOGGLE, T_COUNT, String(), on ? 1 : 0, 1 }; }
 RowValue ui_sliderValue(int v, int m) { return { RK_SLIDER, T_COUNT, String(), v, m }; }
 
-void ui_row(const Rect& r, int index, Txt label, const RowValue& v) {
+// A slider row's value and track, drawn on `bg`. Shared by ui_row and
+// ui_rowSlider so a drag and a full redraw cannot disagree.
+static void drawSliderValue(const Rect& r, uint16_t bg, int value, int maxValue) {
   const Palette& p = theme();
-  const uint16_t bg = ui_rowSurface(r, index);
-  const int labelW = ui_label(label, r.x + SP_L, r.cy(), ML_DATUM, p.text, bg, r.w / 2);
+  ui_text(String(value) + "%", r.x + r.w - SP_L, r.cy(), MR_DATUM, p.accent, bg, ROW_VALUE_W,
+          TYPE_CAPTION);
+  const Rect track = ui_rowTrack(r);
+  if (track.w > SP_XXL) ui_slider(track, value, maxValue, bg);
+}
+
+void ui_rowSlider(const Rect& r, int index, int value, int maxValue) {
+  const uint16_t bg = rowColour(index, false, false);
+  // From just left of the track (the knob overhangs it) to the row's end.
+  const int x = ui_rowTrack(r).x - SP_M;
+  paintRowPart(r, { x, r.y, r.x + r.w - x, r.h }, bg, false);
+  drawSliderValue(r, bg, value, maxValue);
+}
+
+void ui_row(const Rect& r, int index, Txt label, const RowValue& v, bool pressed) {
+  const Palette& p = theme();
+  const uint16_t bg = ui_rowSurface(r, index, false, pressed);
+  // Capped short of the middle, where a slider's track (and its knob) begin.
+  const int labelW = ui_label(label, r.x + SP_L, r.cy(), ML_DATUM, p.text, bg,
+                              r.w / 2 - SP_L - SP_M);
   const uint16_t col = (v.kind == RK_INFO) ? p.dim : p.accent;
 
   // Where the value may be drawn: right of the label, left of its affordance.
@@ -309,12 +351,9 @@ void ui_row(const Rect& r, int index, Txt label, const RowValue& v) {
     case RK_TOGGLE:
       ui_switch(r, v.value != 0);
       break;
-    case RK_SLIDER: {
-      ui_text(String(v.value) + "%", right, r.cy(), MR_DATUM, col, bg, ROW_VALUE_W, TYPE_CAPTION);
-      const Rect track = ui_rowTrack(r);
-      if (track.w > SP_XXL) ui_slider(track, v.value, v.max, bg);
+    case RK_SLIDER:
+      drawSliderValue(r, bg, v.value, v.max);
       break;
-    }
     case RK_NAV:
       if (v.text.length() && room > 0)
         ui_text(v.text, right - SP_S, r.cy(), MR_DATUM, col, bg, room, TYPE_CAPTION);
@@ -448,6 +487,8 @@ String ui_time(uint32_t ms, bool known) {
 }
 
 #ifndef CYD_UPLOADER
+#include "background.h"
+
 // ---------------------------------------------------------------------------
 // Screen switcher
 // ---------------------------------------------------------------------------
@@ -456,8 +497,22 @@ static const Screen* SCREENS[SCR_COUNT] = { &SCREEN_PLAYER, &SCREEN_SETUP, &SCRE
 static ScreenId current = SCR_PLAYER;
 static bool     entered = false;
 
+enum Overlay : uint8_t { OV_NONE, OV_TOAST, OV_CONFIRM };
+static Overlay  overlay = OV_NONE;
+
+// The finger, as the press hooks see it (Screen::press).
+static bool pressDown     = false;
+static bool pressClaimed  = false;   // a hook took it as a drag: swallow its event
+static bool pressOrphaned = false;   // the screen changed under it: ignore it
+static int  pressX = 0, pressY = 0;
+
 void ui_go(ScreenId id) {
   if (entered && SCREENS[current]->leave) SCREENS[current]->leave();
+  // A screen can change from a tick (Bluetooth moves on once the speaker
+  // pairs) with a finger still down. That press belonged to the old screen;
+  // the new one never saw it land, so it hears nothing of it.
+  if (pressDown) pressOrphaned = true;
+  overlay = OV_NONE;                     // the new screen draws over it anyway
   current = id;
   entered = true;
   SCREENS[current]->enter();
@@ -466,12 +521,161 @@ void ui_go(ScreenId id) {
 ScreenId ui_current() { return current; }
 void ui_redraw()      { SCREENS[current]->enter(); }
 
+// ---------------------------------------------------------------------------
+// Confirm dialog
+// ---------------------------------------------------------------------------
+static ConfirmFn confirmFn = nullptr;
+static Txt       confirmOk = T_RESTART;
+static Rect      cancelRect, okRect;
+
+static void drawConfirmButtons(int pressed) {
+  const uint16_t panel = theme().surfaceRaised;
+  ui_textButton(cancelRect, T_CANCEL, false, pressed == 0, panel);
+  ui_textButton(okRect, confirmOk, true, pressed == 1, panel);
+}
+
+void ui_confirm(Txt title, Txt line1, Txt line2, Txt okLabel, ConfirmFn onOk) {
+  const Palette& p = theme();
+  const Style&   s = style();
+  bg_stop();                             // its masks cannot cover a dialog
+  overlay   = OV_CONFIRM;
+  confirmFn = onOk;
+  confirmOk = okLabel;
+
+  const int W = tft.width(), H = tft.height();
+  const int w = min(W - SP_L * 2, 296), h = 150;
+  const Rect r = { (W - w) / 2, (H - h) / 2, w, h };
+  const int rad = s.radius;
+
+  if (s.shadow) {
+    if (rad) tft.fillRoundRect(r.x + s.shadow, r.y + s.shadow, r.w, r.h, rad, p.outline);
+    else     tft.fillRect(r.x + s.shadow, r.y + s.shadow, r.w, r.h, p.outline);
+  }
+  if (rad) tft.fillRoundRect(r.x, r.y, r.w, r.h, rad, p.surfaceRaised);
+  else     tft.fillRect(r.x, r.y, r.w, r.h, p.surfaceRaised);
+  // Always at least a hairline: a panel must not melt into the screen behind.
+  for (int i = 0; i < max<int>(1, s.border); i++) {
+    if (rad) tft.drawRoundRect(r.x + i, r.y + i, r.w - i * 2, r.h - i * 2, rad, p.outline);
+    else     tft.drawRect(r.x + i, r.y + i, r.w - i * 2, r.h - i * 2, p.outline);
+  }
+
+  const int tx = r.x + SP_L, tw = r.w - SP_L * 2;
+  ui_label(title, tx, r.y + 22, ML_DATUM, p.text, p.surfaceRaised, tw);
+  ui_label(line1, tx, r.y + 52, ML_DATUM, p.dim, p.surfaceRaised, tw);
+  ui_label(line2, tx, r.y + 74, ML_DATUM, p.dim, p.surfaceRaised, tw);
+
+  const int bh = 44, by = r.y + r.h - SP_M - bh, bw = (r.w - SP_M * 3) / 2;
+  cancelRect = { r.x + SP_M, by, bw, bh };
+  okRect     = { r.x + SP_M * 2 + bw, by, bw, bh };
+  drawConfirmButtons(-1);
+}
+
+static void closeOverlay() {
+  overlay = OV_NONE;
+  ui_redraw();
+}
+
+static void confirmTouch(TouchEvent ev, int x, int y) {
+  if (ev != TOUCH_TAP) return;
+  const bool ok = okRect.contains(x, y);
+  if (!ok && !cancelRect.contains(x, y)) return;    // a stray tap is not an answer
+  const ConfirmFn fn = ok ? confirmFn : nullptr;
+  confirmFn = nullptr;
+  overlay = OV_NONE;
+  if (fn) fn();                          // may not return: the panel switch restarts
+  ui_redraw();
+}
+
+static void confirmPress(PressPhase phase, int x, int y) {
+  static int lit = -1;
+  if (phase == PRESS_DOWN) {
+    lit = cancelRect.contains(x, y) ? 0 : okRect.contains(x, y) ? 1 : -1;
+    if (lit >= 0) drawConfirmButtons(lit);
+  } else if (phase == PRESS_UP && lit >= 0) {
+    lit = -1;
+    drawConfirmButtons(-1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+static uint32_t toastUntil = 0;
+
+void ui_toast(Txt text, uint32_t ms) {
+  const Palette& p = theme();
+  const Style&   s = style();
+  const int W = tft.width(), H = tft.height();
+  const Rect r = { SP_XL, H - SP_XL - 34, W - SP_XL * 2, 34 };
+  // Inverted -- text colour as the face -- so it stands off any row under it.
+  if (s.shadow) tft.fillRect(r.x + s.shadow, r.y + s.shadow, r.w, r.h, p.outline);
+  if (s.radius) tft.fillRoundRect(r.x, r.y, r.w, r.h, s.radius, p.text);
+  else          tft.fillRect(r.x, r.y, r.w, r.h, p.text);
+  ui_label(text, r.cx(), r.cy(), MC_DATUM, p.bg, p.text, r.w - SP_XL);
+  overlay = OV_TOAST;
+  toastUntil = millis() + ms;
+}
+
+// ---------------------------------------------------------------------------
+// The finger, between landing and release
+// ---------------------------------------------------------------------------
+static bool dispatchPress(PressPhase phase, int x, int y) {
+  if (pressOrphaned || overlay == OV_TOAST) return false;
+  if (overlay == OV_CONFIRM) { confirmPress(phase, x, y); return false; }
+  const Screen* s = SCREENS[current];
+  return s->press ? s->press(phase, x, y) : false;
+}
+
+// Bring the press hooks up to date with the finger. Returns true when a press
+// has just ended that must not produce an event (a drag, or an orphan).
+static bool syncPress() {
+  if (touch_isDown()) {
+    int x, y;
+    if (!pressDown) {
+      pressDown = true;
+      pressClaimed = pressOrphaned = false;
+      touch_position(x, y);              // where it landed: what a tap acts on
+      pressX = x;
+      pressY = y;
+      pressClaimed |= dispatchPress(PRESS_DOWN, x, y);
+    } else {
+      touch_livePosition(x, y);
+      if (x != pressX || y != pressY) {
+        pressX = x;
+        pressY = y;
+        pressClaimed |= dispatchPress(PRESS_MOVE, x, y);
+      }
+    }
+    return false;
+  }
+  if (!pressDown) return false;
+  pressDown = false;
+  dispatchPress(PRESS_UP, pressX, pressY);
+  const bool swallow = pressClaimed || pressOrphaned;
+  pressClaimed = pressOrphaned = false;
+  return swallow;
+}
+
+bool ui_pressClaimed() { return pressDown && pressClaimed; }
+
 void ui_tick(uint32_t now) {
-  if (entered && SCREENS[current]->tick) SCREENS[current]->tick(now);
+  if (!entered) return;
+  // touch_poll() ran first this loop. If it saw a release that made an event,
+  // ui_touch() has already synced; here we catch releases that made none.
+  syncPress();
+  if (overlay == OV_TOAST && (int32_t)(now - toastUntil) >= 0) closeOverlay();
+  if (overlay != OV_NONE) return;        // nothing may paint over an overlay
+  if (SCREENS[current]->tick) SCREENS[current]->tick(now);
 }
 
 void ui_touch(TouchEvent ev, int x, int y) {
-  if (entered && SCREENS[current]->touch) SCREENS[current]->touch(ev, x, y);
+  if (!entered) return;
+  // Restore whatever the press lit BEFORE the event runs: the event may move
+  // to another screen, which must not then be drawn over.
+  if (syncPress()) return;
+  if (overlay == OV_TOAST)   { closeOverlay(); return; }   // a tap dismisses it
+  if (overlay == OV_CONFIRM) { confirmTouch(ev, x, y); return; }
+  if (SCREENS[current]->touch) SCREENS[current]->touch(ev, x, y);
 }
 
 #endif  // !CYD_UPLOADER
