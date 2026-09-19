@@ -1,0 +1,65 @@
+// ===========================================================================
+// User_Setup.h  --  TFT_eSPI configuration for ESP32-2432S024R (CYD 2.4")
+// ===========================================================================
+//
+// HOW TO USE
+//   1. Locate the TFT_eSPI library folder:
+//        ~/Documents/Arduino/libraries/TFT_eSPI/     (Arduino IDE)
+//        <sketchbook>/libraries/TFT_eSPI/User_Setup.h
+//   2. Replace that library's User_Setup.h with this file's contents.
+//   3. Compile Stage 0.1 (s01_display_test) and follow the plan §0.1
+//      diagnosis table until three RGB bars + "TOP LEFT" render correctly.
+//   4. THE MOMENT IT WORKS, copy your final User_Setup.h back over this
+//      template so a library update can't wipe your settings (plan §0.1 note).
+//
+// Values below are the plan's STARTING points. Stage 0.1 confirms the final
+// ones -- record them in ../docs/stage0_results.md.
+// ===========================================================================
+
+// ---- Driver ---------------------------------------------------------------
+// Plan §0.1 starting guess. If the screen is blank/white/garbage, try
+// ST7789_DRIVER instead.
+#define ILI9341_2_DRIVER
+
+// ---- Panel geometry (portrait native; setRotation(1) -> 320x240) ----------
+#define TFT_WIDTH  240
+#define TFT_HEIGHT 320
+
+// ---- Colour handling ------------------------------------------------------
+// If red shows as cyan / blue as orange, toggle inversion.
+// If only red<->blue are swapped, toggle the RGB order line.
+//
+// CONFIRMED 2026-07-22 (test 0.1): the panel showed the exact complement of
+// every colour (red->cyan, green->magenta, blue->yellow) => full inversion.
+// TFT_INVERSION_ON fixes it.
+#define TFT_INVERSION_ON
+//#define TFT_INVERSION_OFF
+#define TFT_RGB_ORDER TFT_BGR   // try TFT_RGB if red/blue swapped
+
+// ---- SPI pins (HSPI) -- plan §2 -------------------------------------------
+#define TFT_MOSI 13
+#define TFT_MISO 12
+#define TFT_SCLK 14
+#define TFT_CS   15
+#define TFT_DC    2
+#define TFT_RST  -1
+
+// Backlight left at boot default for v1; do not let TFT_eSPI drive it.
+// (No TFT_BL / TFT_BACKLIGHT_ON defines on purpose.)
+
+// ---- Fonts ----------------------------------------------------------------
+#define LOAD_GLCD
+#define LOAD_FONT2
+#define LOAD_FONT4
+#define LOAD_FONT6
+#define LOAD_FONT7
+#define LOAD_FONT8
+#define LOAD_GFXFF
+#define SMOOTH_FONT
+
+// ---- SPI speed ------------------------------------------------------------
+// If the display is faint/flickering/intermittent, drop to 40000000 or
+// 27000000 (plan §0.1 table).
+#define SPI_FREQUENCY       55000000
+#define SPI_READ_FREQUENCY  20000000
+#define SPI_TOUCH_FREQUENCY  2500000   // XPT2046 is driven on its own bus in code

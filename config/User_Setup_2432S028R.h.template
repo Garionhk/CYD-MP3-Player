@@ -1,0 +1,90 @@
+// ===========================================================================
+// User_Setup.h  --  TFT_eSPI configuration for ESP32-2432S028R (CYD 2.8")
+// ===========================================================================
+//
+// HOW TO USE
+//   1. Locate the TFT_eSPI library folder:
+//        ~/Documents/Arduino/libraries/TFT_eSPI/User_Setup.h
+//   2. Replace that library's User_Setup.h with this file's contents.
+//        cp config/User_Setup_2432S028R.h.template \
+//           ~/Documents/Arduino/libraries/TFT_eSPI/User_Setup.h
+//   3. Compile and flash stage0/s01_display_test. It cross-checks these pins
+//      against config/board.h at COMPILE time and refuses to build if the two
+//      disagree -- that catches "I forgot to swap User_Setup.h", which is the
+//      single most common way this bring-up goes wrong.
+//   4. The moment the display is right, copy your final User_Setup.h back over
+//      this template so a library update can't silently wipe your settings.
+//
+// The 2.4" board's settings are kept in User_Setup_2432S024R.h.template. The
+// two differ in exactly two places: backlight pin (27 vs 21, handled in code,
+// not here) and colour inversion (ON for the 2.4", OFF here).
+// ===========================================================================
+
+// ---- Driver ---------------------------------------------------------------
+// ILI9341_2_DRIVER is the alternative init sequence; it is what the CYD panels
+// want. If the screen stays blank or shows garbage, try plain ILI9341_DRIVER,
+// then ST7789_DRIVER.
+#define ILI9341_2_DRIVER
+
+// ---- Panel geometry (portrait native; setRotation(1|3) -> 320x240) --------
+#define TFT_WIDTH  240
+#define TFT_HEIGHT 320
+
+// ---- Colour handling ------------------------------------------------------
+// Symptom -> fix:
+//   every colour is its exact complement (red->cyan, green->magenta,
+//   blue->yellow)          -> toggle TFT_INVERSION_ON / _OFF
+//   only red and blue are swapped, green fine
+//                          -> switch TFT_RGB_ORDER between TFT_BGR and TFT_RGB
+//
+// CONFIRMED 2026-07-22 (test 0.1) on this unit: with inversion off the panel
+// showed the exact complement of every colour (red->cyan, green->magenta,
+// blue->yellow), so it needs TFT_INVERSION_ON -- same as the 2.4" board, and
+// the opposite of what most 2.8" CYDs are documented to want. Panel lots vary;
+// trust the test, not the internet. If you change this, also update
+// CYD_TFT_INVERT in config/board.h so the two stay in step (s01 checks).
+#define TFT_INVERSION_ON
+//#define TFT_INVERSION_OFF
+#define TFT_RGB_ORDER TFT_BGR
+
+// ---- SPI pins -- must match config/board.h ---------------------------------
+#define TFT_MOSI 13
+#define TFT_MISO 12
+#define TFT_SCLK 14
+#define TFT_CS   15
+#define TFT_DC    2
+#define TFT_RST  -1
+
+// ---- SPI port -- REQUIRED, and easy to miss --------------------------------
+// Without this, TFT_eSPI puts the display on VSPI, which is the bus the touch
+// controller needs. The display still works, so the mistake shows up later as
+// a touch panel that reads a constant 0. Keep the display on HSPI.
+#define USE_HSPI_PORT
+
+// ---- Backlight -------------------------------------------------------------
+// Deliberately NOT configured here. The backlight pin differs between our two
+// boards, so it is driven from code via cydBacklightOn() in config/board.h --
+// one source of truth, and it leaves the door open for PWM dimming off the LDR
+// later. Do not add TFT_BL / TFT_BACKLIGHT_ON.
+
+// ---- Fonts ----------------------------------------------------------------
+#define LOAD_GLCD
+#define LOAD_FONT2
+#define LOAD_FONT4
+#define LOAD_FONT6
+#define LOAD_FONT7
+#define LOAD_FONT8
+#define LOAD_GFXFF
+#define SMOOTH_FONT
+
+// ---- SPI speed ------------------------------------------------------------
+// 55 MHz is the safe starting point for the 2.8". If it is rock solid you can
+// try 80000000; if the display is faint, flickering, or intermittent, drop to
+// 40000000 then 27000000.
+#define SPI_FREQUENCY       55000000
+#define SPI_READ_FREQUENCY  20000000
+
+// TFT_eSPI's own touch support is unused -- the XPT2046 is driven by
+// XPT2046_Touchscreen on its own VSPI bus. Left defined only because some
+// TFT_eSPI builds reference it.
+#define SPI_TOUCH_FREQUENCY  2500000

@@ -1,0 +1,64 @@
+# ---------------------------------------------------------------------------
+# Credentials -- NEVER commit these.
+# ---------------------------------------------------------------------------
+# Nothing user-specific is compiled in: the WiFi network, the paired speaker and
+# every setting live in NVS on the device, and the music on the SD card. This
+# rule is a tripwire -- if a credentials header is ever reintroduced, under any
+# sketch folder, it must not reach a public repo by accident.
+config.h
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+build/
+uploader-cache/
+*.elf
+*.map
+
+# Firmware images. Building writes app.ino.bin and friends into app/build/ (both
+# the player and the uploader image), and tools/make_release.sh writes the 4 MB
+# merged image into release/. Those are published as release assets, not carried
+# in the tree -- release/SHA256SUMS is the tracked record of what was published.
+#
+# No .bin is committed anywhere in this tree, without exception.
+*.bin
+
+# ---------------------------------------------------------------------------
+# Python bytecode from the tools/ generators
+# ---------------------------------------------------------------------------
+__pycache__/
+*.pyc
+
+# ---------------------------------------------------------------------------
+# Local tooling
+# ---------------------------------------------------------------------------
+# Notes and session files from whatever editor or assistant was used to write
+# this; none of it belongs in the history of the firmware.
+.claude/
+CLAUDE.md
+.aider*
+.cursor/
+.venv/
+
+# ---------------------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------------------
+.DS_Store
+._*
+.AppleDouble
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# Personal media and generated card files
+# ---------------------------------------------------------------------------
+# music/ and bg/ are the owner's own files for the SD card, not project sources.
+# sdcard/ holds the generated title font: it is rasterised from a system font
+# (STHeiti on macOS) whose licence does not allow redistributing it, so each
+# owner builds their own with tools/gen_cjk_font.py.
+/music/
+/bg/
+/sdcard/
