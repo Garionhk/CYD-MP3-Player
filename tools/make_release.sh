@@ -2,16 +2,16 @@
 # ---------------------------------------------------------------------------
 # make_release.sh -- build both firmware images and merge them into ONE file
 #
-#   ./tools/make_release.sh 1.1.0
+#   ./tools/make_release.sh 1.1.1
 #
-# Produces release/cyd-mp3-v1.1.0-4mb.bin and adds its line to
+# Produces release/cyd-mp3-v1.1.1-4mb.bin and adds its line to
 # release/SHA256SUMS, keeping the lines of earlier releases.
 #
 # The player (app0) and the WiFi uploader (app1) are separate images (see
 # app/firmware.h). A person flashing a release should not have to know that,
 # so the release is a full 4 MB image -- bootloader, partition table, OTA
 # selector and BOTH apps at their offsets -- written with a single
-#   esptool write-flash 0x0 cyd-mp3-v1.1.0-4mb.bin
+#   esptool write-flash 0x0 cyd-mp3-v1.1.1-4mb.bin
 #
 # Like any full image written at 0x0 it is a factory reset: the gaps are 0xFF,
 # which covers NVS (settings, calibration, saved speaker and WiFi). To update
@@ -22,11 +22,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# "v1.1.0" and "V1.1.0" mean 1.1.0: the file name adds its own "v".
+# "v1.1.1" and "V1.1.1" mean 1.1.1: the file name adds its own "v".
 VERSION="${1:-}"
 VERSION="${VERSION#[vV]}"
 if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "usage: tools/make_release.sh <version>   e.g. 1.1.0" >&2
+  echo "usage: tools/make_release.sh <version>   e.g. 1.1.1" >&2
   exit 1
 fi
 # The version the firmware reports (Setup > About, the boot banner) must be the

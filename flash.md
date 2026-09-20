@@ -48,11 +48,11 @@ boots the player.
 ## 3. Making a release
 
 ```bash
-./tools/make_release.sh 1.1.0
+./tools/make_release.sh 1.1.1
 ```
 
 Set `FIRMWARE_VERSION` in `app/firmware.h` first; the script refuses a version
-that does not match it. Produces `release/cyd-mp3-v1.1.0-4mb.bin` and adds its
+that does not match it. Produces `release/cyd-mp3-v1.1.1-4mb.bin` and adds its
 line to `release/SHA256SUMS`, keeping earlier releases' lines: a full 4 MB
 image with bootloader, partition table, OTA selector and **both** apps at their
 offsets, so the person flashing it needs one command and one address.
@@ -91,7 +91,7 @@ esptool --port /dev/cu.usbserial-1420 erase-flash
 ```
 
 ```bash
-esptool --port /dev/cu.usbserial-1420 --baud 115200 write-flash 0x0 cyd-mp3-v1.1.0-4mb.bin
+esptool --port /dev/cu.usbserial-1420 --baud 115200 write-flash 0x0 cyd-mp3-v1.1.1-4mb.bin
 ```
 
 At 115200 a 4 MB image takes a few minutes. Older esptool (v4) spells the

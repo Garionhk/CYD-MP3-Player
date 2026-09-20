@@ -28,6 +28,12 @@ void settings_begin() {
   s.bgIndex    = prefs.getUChar ("bg",     s.bgIndex);
   s.btName     = prefs.getString("btName", s.btName);
   prefs.getBytes("btAddr", s.btAddr, sizeof(s.btAddr));
+  // One blob for the lot. A blob of another size is from another version of
+  // this struct: ignore it rather than reading it as garbage.
+  if (prefs.getBytesLength("known") == sizeof(s.btKnown)) {
+    prefs.getBytes("known", s.btKnown, sizeof(s.btKnown));
+    s.btKnownCount = min<uint8_t>(prefs.getUChar("knownN", 0), BT_KNOWN_MAX);
+  }
   s.wifiSsid   = prefs.getString("ssid",   s.wifiSsid);
   s.wifiPass   = prefs.getString("pass",   s.wifiPass);
   prefs.end();
@@ -40,6 +46,16 @@ void settings_begin() {
                 s.panel, s.invert, s.rotation, s.brightness, s.volume, s.lastTrack,
                 s.lastPosMs / 1000, s.shuffle, s.repeat, s.timeMode, s.bgIndex,
                 s.btName.c_str());
+  // The address as well as the name: the library keeps its OWN record of the
+  // last device for its boot reconnect, and when the two disagree the player
+  // reconnects to one device while the screen names another.
+  Serial.printf("settings: speaker address %02x:%02x:%02x:%02x:%02x:%02x\n",
+                s.btAddr[0], s.btAddr[1], s.btAddr[2], s.btAddr[3], s.btAddr[4], s.btAddr[5]);
+  for (int i = 0; i < s.btKnownCount; i++)
+    Serial.printf("settings: known %d \"%s\" %02x:%02x:%02x:%02x:%02x:%02x\n", i + 1,
+                  s.btKnown[i].name, s.btKnown[i].addr[0], s.btKnown[i].addr[1],
+                  s.btKnown[i].addr[2], s.btKnown[i].addr[3], s.btKnown[i].addr[4],
+                  s.btKnown[i].addr[5]);
 }
 
 void settings_save() {
@@ -62,6 +78,8 @@ void settings_save() {
   prefs.putUChar ("bg",       s.bgIndex);
   prefs.putString("btName",   s.btName);
   prefs.putBytes ("btAddr",   s.btAddr, sizeof(s.btAddr));
+  prefs.putBytes ("known",    s.btKnown, sizeof(s.btKnown));
+  prefs.putUChar ("knownN",   s.btKnownCount);
   prefs.putString("ssid",     s.wifiSsid);
   prefs.putString("pass",     s.wifiPass);
   prefs.end();

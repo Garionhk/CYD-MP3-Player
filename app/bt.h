@@ -33,12 +33,41 @@ bool   bt_connected();
 bool   bt_connecting();
 String bt_speakerName();
 
+// How a connection the owner asked for ended, if it did not succeed.
+enum BtFailure : uint8_t {
+  BT_FAIL_NONE = 0,
+  BT_FAIL_TIMEOUT,                    // nothing came back in time
+  BT_FAIL_AUTH,                       // the device refused the pairing
+};
+
 // Pairing
 bool   bt_pairingBoot();              // this boot was started to pair a speaker
 void   bt_requestPairing();           // restart into a pairing boot (does not return)
 void   bt_cancelPairing();            // restart into a normal boot (does not return)
 int    bt_deviceCount();
 bool   bt_device(int i, BtDevice& out);
+
+// ---------------------------------------------------------------------------
+// Devices connected before, most recent first (Settings::btKnown)
+// ---------------------------------------------------------------------------
+// A car and a speaker take turns, and neither can be found by discovery once
+// it is out of pairing mode -- a car only advertises while its pairing screen
+// is open. Keeping the addresses means either can be paged on request.
+// Is this the device currently on the other end? By address: names are not
+// unique, and the stored name lags a moment behind a switch.
+bool   bt_isConnectedTo(const uint8_t addr[6]);
+
+int    bt_knownCount();
+bool   bt_known(int i, BtDevice& out);
+void   bt_connectKnown(int i);        // page it now
+void   bt_forget(int i);              // drop it from the list
 uint32_t bt_listSerial();             // changes whenever the list does
 void   bt_choose(int i);
 bool   bt_choosing();                 // a device was tapped, waiting for it
+
+// Why the last attempt the owner made failed; cleared by the next attempt.
+BtFailure bt_failure();
+// A Secure Simple Pairing code to compare with the one on the other device,
+// or 0. A car shows one and waits; the owner cannot confirm what they cannot
+// see, so the screen has to display it.
+uint32_t  bt_passkey();

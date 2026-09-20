@@ -561,8 +561,8 @@ void ui_confirm(Txt title, Txt line1, Txt line2, Txt okLabel, ConfirmFn onOk) {
 
   const int tx = r.x + SP_L, tw = r.w - SP_L * 2;
   ui_label(title, tx, r.y + 22, ML_DATUM, p.text, p.surfaceRaised, tw);
-  ui_label(line1, tx, r.y + 52, ML_DATUM, p.dim, p.surfaceRaised, tw);
-  ui_label(line2, tx, r.y + 74, ML_DATUM, p.dim, p.surfaceRaised, tw);
+  if (line1 != T_COUNT) ui_label(line1, tx, r.y + 52, ML_DATUM, p.dim, p.surfaceRaised, tw);
+  if (line2 != T_COUNT) ui_label(line2, tx, r.y + 74, ML_DATUM, p.dim, p.surfaceRaised, tw);
 
   const int bh = 44, by = r.y + r.h - SP_M - bh, bw = (r.w - SP_M * 3) / 2;
   cancelRect = { r.x + SP_M, by, bw, bh };

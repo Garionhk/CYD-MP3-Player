@@ -27,6 +27,13 @@ enum RepeatMode : uint8_t {
   REPEAT_MODE_COUNT
 };
 
+// One device the player has connected to before.
+static const int BT_KNOWN_MAX = 5;
+struct BtKnown {
+  uint8_t addr[6];
+  char    name[33];
+};
+
 struct Settings {
   // Panel -- defaults come from the board profile, the stored values win.
   uint16_t panel      = CYD_PANEL_DRIVER;   // CYD_PANEL_ST7789 / CYD_PANEL_ILI9341
@@ -56,6 +63,13 @@ struct Settings {
   // the name is what the screen shows while the link comes up.
   String   btName;
   uint8_t  btAddr[6] = { 0, 0, 0, 0, 0, 0 };
+
+  // The devices this player has connected to, most recent first, so the owner
+  // can move between a speaker and a car without pairing again. Fixed-size
+  // rather than Strings: it is written from the Bluetooth task's small stack
+  // and stored as one NVS blob.
+  BtKnown  btKnown[BT_KNOWN_MAX];
+  uint8_t  btKnownCount = 0;
 
   // WiFi, used only by upload mode. Entered on a phone through the hotspot's
   // page, never compiled in.

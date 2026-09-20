@@ -8,6 +8,35 @@ With the Bluetooth stack (~80 KB) and the MP3 decoder (~33 KB) running, the
 player has ~30 KB of heap to spare, and a Bluetooth connection briefly needs a
 good part of that.
 
+## 2026-09-20 — The player owns the Bluetooth connection, not the library
+
+**Context.** Everything worked with a speaker and nothing worked with a car.
+A speaker answers every inquiry, so the library's model -- discover, then
+connect to what discovery accepted -- was never tested against a device that
+announces itself once and goes quiet. Against a car head unit it failed at
+every step: a tap was recorded and waited for a second sighting that never
+came; the peer address was taken from the last discovery rather than from the
+connection, so the car's audio played while the screen named the speaker; the
+board stopped being connectable ten seconds after boot, so the car could not
+open the link either; and any disconnection made the library page the device
+just left, which beat the one the owner had asked for.
+
+**Decision.** The connection is ours. A tap pages the device immediately,
+through the library's own path so its state machine stays in step. The peer
+address comes from the A2DP connection event, and is written back to the
+library so its start-up reconnect agrees with ours. A known device is paged by
+address every 15 s rather than scanned for. The board stays connectable, and a
+connection the peer opens is put into a state the library will act on. Chasing
+the previously connected device is start-up behaviour only, and one attempt.
+
+**Consequences.** A subclass of `BluetoothA2DPSource` reaches four protected
+members (`peer_bd_addr`, `s_peer_bdname`, `s_a2d_state`, `discovery_active`)
+and overrides `app_a2d_callback` and `app_gap_callback`. That is a dependency
+on the library's internals, and a version bump may need it revisited -- the
+alternative was a fork. Addresses and names are stored together, five of them,
+because they had drifted apart once and stranded the player on a device that
+was not there.
+
 ## 2026-09-18 — A release is checked slot by slot
 
 **Context.** A merged image went out of the build with the uploader in app0 and

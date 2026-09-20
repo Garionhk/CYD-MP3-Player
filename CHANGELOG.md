@@ -2,6 +2,48 @@
 
 What shipped. Why it was built that way is in [docs/decisions.md](docs/decisions.md).
 
+## 1.1.1 — 2026-09-20
+
+Bluetooth. Connecting to a car exposed a set of faults that a speaker never
+had: a speaker answers every scan, a car announces itself once and goes quiet.
+
+### Fixed
+- **Tapping a device connects to it.** It used to be recorded and then waited
+  for, connecting only if the scan happened to report that device a second
+  time. A car never does, so the screen said "connecting" for ever and nothing
+  was ever sent to it.
+- **The connected device is identified correctly.** The peer address was read
+  from the library's last discovery rather than from the connection itself, so
+  connecting to a car saved the speaker's address and name — the car played
+  while the screen named the speaker, and the next start-up reconnected to the
+  wrong device.
+- **Reconnecting works after a disconnection.** A known device is now paged by
+  address every 15 s, instead of scanning for one that is no longer
+  advertising.
+- **A connection the car starts is accepted.** The board stopped being
+  connectable ten seconds after boot, and the library ignored connection events
+  while scanning, which the car reported as a failed connection.
+- **Switching devices no longer needs the other one switched off.** Any
+  disconnection made the library page the device just left, beating the one
+  asked for. That now happens only at start-up, and once (was three times).
+- **The Bluetooth screen is reachable while connected.** It handed straight
+  back to the player for the rest of a session that began with Pair new.
+- **Pair new discovers again** instead of quietly reconnecting to a remembered
+  device that happened to be switched on nearby.
+
+### Added
+- **The last 5 connected devices are remembered** and listed, with the
+  connected one marked. One tap moves between them, disconnecting first if
+  need be; no pairing, and no waiting for a car to advertise.
+- **A ✕ on each saved device deletes it**, after asking. Deleting drops the
+  link, removes the pairing from the stack and stops the player reaching for it.
+- Pairing is visible: a Secure Simple Pairing code the other device shows is
+  displayed here too, and a refusal is reported instead of a silent wait.
+- A connection attempt gives up after 20 s with "No answer — tap it to try
+  again" rather than waiting indefinitely.
+- The boot log prints the saved device's address beside its name, and every
+  remembered device.
+
 ## 1.1.0 — 2026-09-18
 
 A design system: the look is now data, the controls answer the finger while it

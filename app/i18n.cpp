@@ -73,6 +73,14 @@ static const Entry TABLE[] = {
   { "The screen may go blank.", "畫面可能會變黑。" },
   { "Hold it 8 s at boot to undo.", "開機按住螢幕 8 秒可復原。" },
   { "Uploader not installed", "未安裝上傳程式" },
+  { "Another device? Tap Pair new.", "其他裝置請按「配對新裝置」" },
+  { "No answer - tap it to try again", "沒有回應，請再按一次" },
+  { "Confirm this code:",     "請核對此代碼：" },
+  { "Refused - forget it there, try again", "被拒絕，請在該裝置刪除後再試" },
+  { "saved",                 "已儲存" },
+  { "Forget",                "刪除" },
+  { "Forget this device?",   "刪除此裝置？" },
+  { "It can be paired again later.", "之後可以重新配對。" },
 };
 static_assert(sizeof(TABLE) / sizeof(TABLE[0]) == T_COUNT, "i18n TABLE does not match enum Txt");
 

@@ -14,6 +14,9 @@ WiFi page for adding music from a phone or laptop.
   from ID3 tags, falling back to the file name.
 - **Speaker buttons work**: play/pause and next/previous on the speaker itself
   control the player. Switch the speaker off and on and it reconnects on its own.
+- **Remembers the last 5 devices** — a speaker, headphones, a car — and moves
+  between them with one tap. Works with car head units, which cannot be found
+  by scanning once their pairing screen is closed.
 - **Animated backgrounds** from any GIF, any size — cropped or shrunk to fit.
 - **Looks**: 8 colour themes, 7 control styles and 3 layouts, mixed freely, in
   portrait or landscape either way up.
@@ -80,7 +83,7 @@ from source — see [Building](#building) below.
 2. **"Preparing song titles"** and **"Preparing background"** screens. The first
    boot after adding songs or GIFs does some one-off work; later boots skip it.
 3. **Bluetooth.** Put your speaker in pairing mode and tap its name. From then on
-   it reconnects by itself.
+   it reconnects by itself, and it joins the list of remembered devices.
 
 ---
 
@@ -112,7 +115,7 @@ beside it and the mini-player underneath.
 
 | Row | Values |
 |---|---|
-| Bluetooth speaker | current speaker; **Pair new** to switch |
+| Bluetooth speaker | the devices connected before — tap one to connect or switch, **✕** to forget it; **Pair new** for a device not in the list |
 | Upload music (WiFi) | restarts into upload mode |
 | Theme | Dark, Light, Neon, Retro Amber, Ocean, Phosphor, Paper, Pop |
 | Style | Classic, Frosted deck, Hi-fi console, Swiss grid, Cassette pop, Terminal, Paper mono — the shape of buttons, rows and the progress bar. Picking one also sets the theme it was designed for |
@@ -248,7 +251,10 @@ measurements are in [docs/decisions.md](docs/decisions.md).
 | "No SD card" | FAT32, fully inserted; exFAT cards will not mount |
 | Titles show only Latin letters, menus stay English | `/.sys/cjk16.vlw` missing — see step 2 |
 | Speaker not found | Put it in pairing mode; **Setup → Bluetooth speaker → Pair new** |
-| Speaker does not reconnect after power-on | Wait ~30 s; if not, pairing mode once |
+| Speaker does not reconnect after power-on | Wait ~30 s — a saved device is called once every 15 s; if not, pairing mode once |
+| "No answer - tap it to try again" | The device is off, out of range, or connected to something else |
+| A car does not appear in the list | Open its "connect a device" screen first: a head unit is only findable while that is on screen. Once paired it is remembered, and a tap reaches it without that |
+| Deleted device still connects | It should not — deleting also removes the pairing. If it returns, delete the player from the other device as well |
 | "Uploader not installed" in Setup | Only the player was flashed — use `tools/flash.sh app` or a release image |
 | Always starts in upload mode, even after Done or a reset | The image flashed has no player in it (the uploader sits in the player's slot). Reflash with `tools/flash.sh app` or a release built by `tools/make_release.sh`, which checks for this |
 | Audio drops out | Watch the serial log's `underruns` count; try background off to compare |
